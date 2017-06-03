@@ -16,7 +16,7 @@ pip install git+https://github.com/ChangLabUcsf/electrode_grid.git
 from electrode_grid import show_erps, get_channel_order
 from scipy.io import loadmat
 
-anatomy_path = os.path.join(subj_dir, 'TDT_elecs_all.mat')
+anatomy_path = os.path.join(subj_dir, 'elecs', 'TDT_elecs_all.mat')
 anatomy = np.hstack(loadmat(anatomy_path)['anatomy'][:,-1])
 channel_order = get_channel_order('EC61')
 
