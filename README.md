@@ -13,6 +13,8 @@ pip install git+https://github.com/ChangLabUcsf/electrode_grid.git
 
 ## Usage
 ```python
+import os
+import numpy as np
 from electrode_grid import show_erps, get_channel_order
 from scipy.io import loadmat
 
@@ -25,3 +27,4 @@ labels = ('list', 'of', 'condition', 'labels')
 
 show_erps(Ds, labels, anatomy=anatomy, yscale=(-.5, 1.7), channel_order=channel_order)
 ```
+![example](example_electrode_grid.png "example image")

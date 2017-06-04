@@ -10,8 +10,8 @@ import seaborn.apionly as sns
 
 def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, elects_to_plot=None, anatomy=None,
                   yscale='shared', co_anat=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True,
-                  figsize=None, elect_num_pos='ul', clinical_num_pos=None, grid_orientation='lr', gridx=16, gridy=16,
-                  elect_num_color='k', xlabel='time (s)', ylabel='HG', channel_order=None):
+                   elect_num_pos='ul', clinical_num_pos=None, grid_orientation='lr', gridx=16, gridy=16,
+                  elect_num_color='k', xlabel='time (s)', ylabel='HG', channel_order=None, fig=None):
     """
     Plots any function on an electrode grid
 
@@ -42,12 +42,11 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
 
     nelect = gridx * gridy
 
-    if figsize is None:
-        figsize = (gridx, gridy)
+    if fig is None:
+        fig = plt.figure(figsize=(gridx, gridy))
 
     clinical_electrodes = np.hstack([np.arange(1, 16, 2) + x for x in np.arange(0, 256, 32)])
 
-    #pdb.set_trace()
     if elects_to_plot is None:
         elects_to_plot = np.arange(nelect)
     elects_to_plot = np.array(elects_to_plot)
@@ -76,8 +75,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
                     xlabel_elect = min(elecs) + 1
                     ylabel_elect = max(elecs) + 1
                     break
-
-    fig = plt.figure(figsize=figsize)
 
     # Define axes face color to illustrate anatomy
     anat_colors = np.empty((len(elects_to_plot), 3))
@@ -139,7 +136,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
         elif grid_orientation == 'straight':
             channel_order = np.arange(nelect) + 1
 
-
     # Add subplot for each electrode
     a = []  # axes list
     ylims = []
@@ -169,8 +165,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
                 clinical_number = np.where(clinical_electrodes == (elect_number + 1))[0] + 1
                 plt.text(x_pos_clinical_number, y_pos_clinical_number, str(clinical_number),
                      transform=ax.transAxes, ha=ha_clinical_number, va=va_clinical_number, fontsize=10, color='red')
-
-
 
         # Add axes labels only on corner electrodes
         ax.set_xticks([align_window[0], 0, align_window[1]])
@@ -223,7 +217,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
 def show_erps(Ds, labels=None, align_window=None, show_sem=True, co_data=None, elects_to_plot=None, gridx=16, gridy=16,
               yscale=(-.5, 2), **kwargs):
     """
-
     :param Ds: data; np.array.shape = (electrodes, time, trials)
     :param labels:
     :param align_window:
@@ -289,6 +282,17 @@ def show_erps(Ds, labels=None, align_window=None, show_sem=True, co_data=None, e
         fig.legend(h_lines, labels, loc='upper right', ncol=2)
 
     return fig, axs
+
+
+def get_channel_order(subject):
+    if subject == 'EC141':
+        co1 = np.rot90((np.arange(128) + 129).reshape(8, 16).T, 3).ravel()
+        co2 = np.rot90((np.arange(128) + 1).reshape(8, 16).T, 3).ravel()
+        channel_order = np.concatenate((co1, co2))
+    else:
+        channel_order = None
+
+    return channel_order
 
 
 def compute_ERP(Ds):
