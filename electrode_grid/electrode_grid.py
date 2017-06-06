@@ -5,8 +5,7 @@ import brewer2mpl as b2mpl
 from tqdm import tqdm
 import seaborn.apionly as sns
 from .FS_colorLUT import get_lut
-
-#TODO: make freesurfer colors default
+from seaborn.utils import set_hls_values
 
 def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, elects_to_plot=None, anatomy=None,
                    yscale='shared', anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True,
@@ -88,6 +87,7 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
         anat_legend_h = []
         for i, region in enumerate(regions):
             color = anat_colors['ctx-rh-' + region] / 255.
+            color = set_hls_values(color, l=.7)  # lighten color
             anat_color_array[region_indices == i] = color
             anat_legend_h.append(mpl.patches.Patch(color=color, label=region))
 
