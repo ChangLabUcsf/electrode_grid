@@ -3,15 +3,16 @@ import matplotlib as mpl
 import numpy as np
 import brewer2mpl as b2mpl
 from tqdm import tqdm
-from itertools import cycle, islice
 import seaborn.apionly as sns
+from .FS_colorLUT import get_lut
 
 #TODO: make freesurfer colors default
 
 def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, elects_to_plot=None, anatomy=None,
-                  yscale='shared', co_anat=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True,
+                   yscale='shared', anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True,
                    elect_num_pos='ul', clinical_num_pos=None, grid_orientation='lr', gridx=16, gridy=16,
-                  elect_num_color='k', xlabel='time (s)', ylabel='HG', channel_order=None, fig=None):
+                   xlabel='time (s)', ylabel='HG', channel_order=None, fig=None,
+                   anat_legend_kwargs = {}, clinical_number_kwargs={}, elec_number_kwargs={}):
     """
     Plots any function on an electrode grid
 
@@ -53,7 +54,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
     if elects_to_plot.dtype == np.bool:
         elects_to_plot = np.where(elects_to_plot)[0]
 
-
     if align_window is None:
         if data is not None:
             align_window = (0, data.shape[-1])
@@ -77,53 +77,27 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
                     break
 
     # Define axes face color to illustrate anatomy
-    anat_colors = np.empty((len(elects_to_plot), 3))
-    if anatomy is None:
-        anat_colors[:] = [0.9, 0.9, 0.9]
+    anat_color_array = np.array([0.9, 0.9, 0.9] * nelect)  # initialize to light gray
+    if anatomy is None and anat_colors is not None:
+        raise Warning('anat colors set without anatomy specified.')
     else:
+        if anat_colors is None:
+            anat_colors = get_lut()
         anatomy = anatomy[elects_to_plot]
         regions, region_indices = np.unique(anatomy, return_inverse=True)
-        anat_map = b2mpl.get_map('Pastel2', 'Qualitative', 8).mpl_colors
-        anat_map = list(islice(cycle(anat_map), len(regions)))
-        anat_legend_h = [mpl.patches.Patch(color=anat_map[i], label=region) for i, region in enumerate(regions)]
-        for i in range(len(regions)):
-            anat_colors[region_indices == i] = anat_map[i]
+        anat_legend_h = []
+        for i, region in enumerate(regions):
+            color = anat_colors['ctx-rh-' + region] / 255.
+            anat_color_array[region_indices == i] = color
+            anat_legend_h.append(mpl.patches.Patch(color=color, label=region))
+
+        # create smart anat legend
+        true_anat_legend_kwargs = {'loc': 'upper_left'}
         if len(regions) > 4:
-            ncol = 2
-        else:
-            ncol = 1
+            true_anat_legend_kwargs.update(ncol=2)
+        true_anat_legend_kwargs.update(**anat_legend_kwargs)
         if anat_legend:
-            fig.legend(handles=anat_legend_h, labels=regions, loc='upper left', ncol=ncol)
-
-    # work out where to draw TDT electrode numbers
-    if elect_num_pos:
-        if elect_num_pos[0] == 'u':
-            y_pos_electrode_number = 1.0
-            va_electrode_number = 'top'
-        else:
-            y_pos_electrode_number = 0.0
-            va_electrode_number = 'bottom'
-        if elect_num_pos[1] == 'l':
-            x_pos_electrode_number = 0.0
-            ha_electrode_number = 'left'
-        else:
-            x_pos_electrode_number = 1.0
-            ha_electrode_number = 'right'
-
-    # work out where to draw clinical electrode numbers
-    if clinical_num_pos:
-        if clinical_num_pos[0] == 'u':
-            y_pos_clinical_number = 1.0
-            va_clinical_number = 'top'
-        else:
-            y_pos_clinical_number = 0.0
-            va_clinical_number = 'bottom'
-        if clinical_num_pos[1] == 'l':
-            x_pos_clinical_number = 0.0
-            ha_clinical_number = 'left'
-        else:
-            x_pos_clinical_number = 1.0
-            ha_clinical_number = 'right'
+            fig.legend(handles=anat_legend_h, labels=regions, **anat_legend_kwargs)
 
     if channel_order == None:
         # Rotate grid by indexing
@@ -136,11 +110,18 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
         elif grid_orientation == 'straight':
             channel_order = np.arange(nelect) + 1
 
+    # set electrode number properties
+    true_elec_number_kwargs = {'fontsize': 10, 'color': 'k'}
+    true_elec_number_kwargs.update(**elec_number_kwargs)
+
+    true_clinical_number_kwargs = {'fontsize': 10, 'color': 'r'}
+    true_clinical_number_kwargs.update(**clinical_number_kwargs)
+
     # Add subplot for each electrode
     a = []  # axes list
     ylims = []
-    for ielect, (elect_number,this_anat_color) in tqdm(enumerate(zip(elects_to_plot, anat_colors)),
-                                                       total=len(elects_to_plot), desc='Drawing electrode grid'):
+    for ielect, (elect_number, this_anat_color) in tqdm(enumerate(zip(elects_to_plot, anat_colors)),
+                                                        total=len(elects_to_plot), desc='Drawing electrode grid'):
 
         ax = fig.add_subplot(gridy, gridx, channel_order[elect_number])
 
@@ -156,15 +137,12 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
 
         # Add electrode number
         if elect_num_pos:
-            plt.text(x_pos_electrode_number, y_pos_electrode_number, str(elect_number + 1),
-                     transform=ax.transAxes, ha=ha_electrode_number, va=va_electrode_number,
-                     fontsize=10, color=elect_num_color)
+            corner_text(str(elect_number + 1), elect_num_pos, ax, **true_elec_number_kwargs)
 
         if clinical_num_pos:
-            if (elect_number+1) in clinical_electrodes:
+            if (elect_number + 1) in clinical_electrodes:
                 clinical_number = np.where(clinical_electrodes == (elect_number + 1))[0] + 1
-                plt.text(x_pos_clinical_number, y_pos_clinical_number, str(clinical_number),
-                     transform=ax.transAxes, ha=ha_clinical_number, va=va_clinical_number, fontsize=10, color='red')
+                corner_text(str(clinical_number), clinical_num_pos, ax, **true_clinical_number_kwargs)
 
         # Add axes labels only on corner electrodes
         ax.set_xticks([align_window[0], 0, align_window[1]])
@@ -339,3 +317,40 @@ def plotSingleERP(tt, data, labels=None, alpha=.5, co=b2mpl.get_map('Set1', 'Qua
     sns.despine(ax=ax)
 
     return plt.gca()
+
+
+def corner_text(text, spec, ax, **kwargs):
+    """
+    Puts `text` in the corner of `ax` specified by `spec`. additional arguments are passed to plt.text.
+
+    Parameters
+    ----------
+    s: str
+        string to placed
+    spec: str
+        specifies which corner. e.g. ul = upper left, lr = lower right
+    ax: plt.axes
+    kwargs: optional arguments get passed to plt.text.
+
+    Returns
+    -------
+    h: plt.text
+
+    """
+    if type(spec) is not str or spec[0] not in ('u', 'l') or spec[1] not in ('l', 'r'):
+        raise ValueError('spec must be string: [u|l][l|r]')
+    x = 0.
+    y = 1.
+    va = 'top'
+    ha = 'left'
+    if spec[0] == 'l':
+        y = 0.0
+        va = 'bottom'
+    if spec[1] == 'r':
+        x = 1.0
+        ha = 'right'
+
+    kwargs = {'va': va, 'ha': ha}.update(**kwargs)
+    h = plt.text(x, y, str(text), transform=ax.transAxes, **kwargs)
+
+    return h
