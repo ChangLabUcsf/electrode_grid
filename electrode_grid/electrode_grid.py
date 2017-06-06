@@ -1,3 +1,4 @@
+from copy import copy
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
@@ -7,37 +8,57 @@ import seaborn.apionly as sns
 from .FS_colorLUT import get_lut
 from seaborn.utils import set_hls_values
 
-def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, elects_to_plot=None, anatomy=None,
-                   yscale='shared', anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True,
-                   elect_num_pos='ul', clinical_num_pos=None, grid_orientation='lr', gridx=16, gridy=16,
-                   xlabel='time (s)', ylabel='HG', channel_order=None, fig=None,
-                   anat_legend_kwargs = {}, clinical_number_kwargs={}, elec_number_kwargs={}):
+
+def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=(-1., 1.), ylims=(-.5, 2.),
+                   anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True, elect_num_pos='ul',
+                   clinical_num_pos=None, grid_orientation='lr', xlabel='time (s)', ylabel='HG', channel_order=None,
+                   fig=None, anat_legend_kwargs={}, clinical_number_kwargs={}, elec_number_kwargs={}):
     """
-    Plots any function on an electrode grid
+    Create electrod grid for plotting.
 
-    Inputs:
-    data: np.array(elects x time) or np.array(elects x time x case) or None
-    align_window: time before and after stimulus in seconds
-    elects_to_plot: list of electrodes by number indexed from 0 or boolean array
-    yscale:
-        individual: Each of the electrodes as its own y-scale
-        {shared}:   The y-scale is the same across all electrodes. The max and min of the entire set is taken
-        range:      Given a defined list of min and max, will scale all electrodes to that
-    anatomy: np.array of anatomy_ID for each electrode. Used to color background of each axis.
-    co_anat: name of seaborn colormap to use for anatomy.
-    labels: Labels for the data legend.
-    anat_legend=True show anatomy legend?
-    elect_num_pos='ul' ("upper left") other options: 'ur', 'll', 'lr', None (do not show)
-    clinical_num_pos=None, options same as elect_num_pos
-    grid_orientation='lr': Where is electrode 1?
-    gridx=16, gridy=16: number of electrodes on grid
-    elect_num_color='k'
-    xlabel='time (s)'
-    ylabel='$HG$'
+    Parameters
+    ----------
+    gridx, gridy: int
+        How many electrodes are there in the x and y dimensions of the grid? (Default: 16)
+    elects_to_plot: list
+        List of electrodes by number indexed from 0 or boolean array
+    anatomy: np.array
+        List of anatomy_ID for each electrode. Used to color background of each axis.
+    xlims, ylims: tuple
+        axes are set using these xlims and ylims
+    anat_colors: dictionary
+        region (str) -> r,g,b (as 0>x>1). Default is the freesurfer colormap, but any of the rois colors can be replaced
+        here.
+    xlabel_elect, ylabel_elect: int
+        Which electrode gets the xlabel and ylabel
+    anat_legend: bool
+        whether to show the anatomy legend
+    elect_num_pos: str or None
+        where to put the electrode number. If None, no electrode number is shown. Otherwise, use
+        'ul': upper left (Default)
+        'll': lower left
+        'ur': upper right
+        'lr': lower right
+    clinical_num_pos: str or None
+        Same as elect_num_pos. 1 in ever 4 electrodes is clinical. Default = None
+    grid_orientation: str
+        Where is electrode #1? Follows elect_num_pos rules.
+    xlabel: str
+        Default: 'time (s)'
+    ylabel: str
+        Default: 'HG'
+    channel_order: list
+        Should be used if channels are in an arrangement that cannot be captured by grid_orientation. Supercedes
+        grid_orientation.
+    fig: plt.Figure
+        Default: None
+    anat_legend_kwargs: dict
+    clinical_number_kwargs: dict
+    elec_number_kwargs: dict
 
-    Returns:
-        fig
-        axs
+    Returns
+    -------
+
     """
 
     nelect = gridx * gridy
@@ -52,15 +73,6 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
     elects_to_plot = np.array(elects_to_plot)
     if elects_to_plot.dtype == np.bool:
         elects_to_plot = np.where(elects_to_plot)[0]
-
-    if align_window is None:
-        if data is not None:
-            align_window = (0, data.shape[-1])
-        else:
-            align_window = (0, 1)
-
-    if data is not None:
-        tt = np.linspace(align_window[0], align_window[1], data.shape[1])
 
     if xlabel_elect is None:
         if elects_to_plot is None:
@@ -80,14 +92,16 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
     if anatomy is None and anat_colors is not None:
         raise Warning('anat colors set without anatomy specified.')
     else:
-        if anat_colors is None:
-            anat_colors = get_lut()
+        # set up anatomy colors
+        input_anat_colors = copy(anat_colors)
+        anat_colors = get_lut()  # use freesurfer defaults
+        anat_colors.update(**input_anat_colors)
+
         anatomy = anatomy[elects_to_plot]
         regions, region_indices = np.unique(anatomy, return_inverse=True)
         anat_legend_h = []
         for i, region in enumerate(regions):
             color = anat_colors['ctx-rh-' + region] / 255.
-            color = set_hls_values(color, l=.7)  # lighten color
             anat_color_array[region_indices == i] = color
             anat_legend_h.append(mpl.patches.Patch(color=color, label=region))
 
@@ -111,7 +125,7 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
             channel_order = np.arange(nelect) + 1
 
     # set electrode number properties
-    true_elec_number_kwargs = {'fontsize': 10, 'color': 'k'}
+    true_elec_number_kwargs = {'fontsize': 10}
     true_elec_number_kwargs.update(**elec_number_kwargs)
 
     true_clinical_number_kwargs = {'fontsize': 10, 'color': 'r'}
@@ -119,18 +133,13 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
 
     # Add subplot for each electrode
     a = []  # axes list
-    ylims = []
     for ielect, (elect_number, this_anat_color) in tqdm(enumerate(zip(elects_to_plot, anat_colors)),
                                                         total=len(elects_to_plot), desc='Drawing electrode grid'):
 
         ax = fig.add_subplot(gridy, gridx, channel_order[elect_number])
-
-        if data is not None:
-            h_lines = plot_func(tt, data[elect_number])
-
-        ylims.append(ax.get_ylim())
-        ax.set_xlim(align_window)
-        ax.set_axis_bgcolor(this_anat_color)
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
+        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=.7))  # lighten color
         for spine in ax.spines.values():
             spine.set_color(this_anat_color)
         a.append(ax)
@@ -145,96 +154,55 @@ def electrode_grid(data, plot_func=plt.plot, align_window=None, labels=None, ele
                 corner_text(str(clinical_number), clinical_num_pos, ax, **true_clinical_number_kwargs)
 
         # Add axes labels only on corner electrodes
-        ax.set_xticks([align_window[0], 0, align_window[1]])
+        ax.set_xticks((xlims[0], 0, xlims[1]))
 
         if elect_number == xlabel_elect - 1:
             ax.set_yticklabels([])
             ax.set_xlabel(xlabel)
-        elif (elect_number == ylabel_elect - 1) and yscale != 'individual':
+        elif elect_number == ylabel_elect - 1:
             ax.set_xticklabels([])
             ax.set_ylabel(ylabel)
         else:
             ax.set_yticklabels([])
             ax.set_xticklabels([])
 
-    if labels is not None:
-        fig.legend(h_lines, labels, loc='upper right')
-
-    # Scale using min and max values from all axes
-    if not isinstance(yscale, str):
-        shared_ylim = yscale
-        for axi in a:
-            axi.set_ylim(shared_ylim)
-
-    elif yscale == 'shared':
-        all_min = min(x[0] for x in ylims)
-        all_max = max(x[1] for x in ylims)
-        shared_ylim = [all_min, all_max]
-        for axi in a:
-            axi.grid(True)
-            axi.set_ylim(shared_ylim)
-            if (shared_ylim[0] < 0) and (shared_ylim[1] > 0):
-                axi.set_yticks((shared_ylim[0], 0, shared_ylim[1]))
-            else:
-                axi.set_yticks(shared_ylim)
-
-    elif yscale == 'individual':
-        pass
-
-    else:
-        print('yscale setting not recognized')
-
     # for axi in a:
     #    plt.plot([0,0],axi.get_ylim(),color='black', axes=axi)
 
     plt.subplots_adjust(left=.07, right=.99, bottom=.1, top=.86, hspace=0.1, wspace=0.1)
 
-    return fig, a
+    return fig, a, elects_to_plot
 
 
-def show_erps(Ds, labels=None, align_window=None, show_sem=True, co_data=None, elects_to_plot=None, gridx=16, gridy=16,
-              yscale=(-.5, 2), **kwargs):
+def show_erps(Ds, align_window, labels=None, show_sem=True, co_data=None, **kwargs):
     """
-    :param Ds: data; np.array.shape = (electrodes, time, trials)
-    :param labels:
-    :param align_window:
 
-    Optional (show_erps):
-    :param show_sem: bool
+    Parameters
+    ----------
+    Ds: list
+        list of D tensors (electrodes x time x trials)
+    align_window: tuple
+        time before and after stim in seconds
+    labels: tuple
+        Optional. labels for data legend
+    show_sem: bool
+    co_data: list
+        List of RGB (0<x<1) values for the data colors. Default: cbrewer Set1
+    kwargs: see electrode_grid
 
-    Optional (electrodeGrid):
-    elects_to_plot = None,
-    anatomy = None
-    yscale = 'shared'
-    co_anat = 'Pastel2'
-    x_axis_label_elect=None (really 241 or 1)
-    y_axis_label_elect=256
-    figsize=10
-
-
-    :return: fig, axs
+    Returns
+    -------
+    fig: plt.Figure
+    axs: list(plt.Axes)
     """
-    if len(align_window) is not 2:
-        raise Exception("align_window must have a length of 2")
-
-    nelect = gridx * gridy
-    if elects_to_plot is None:
-        elects_to_plot = np.arange(nelect)
-    elects_to_plot = np.array(elects_to_plot)
-    if elects_to_plot.dtype == np.bool:
-        elects_to_plot = np.where(elects_to_plot)[0]
 
     if co_data is None:
         co_data = b2mpl.get_map('Set1', 'Qualitative', 4).mpl_colors[1:]
 
-    fig, axs = electrode_grid(None, align_window=align_window, elects_to_plot=elects_to_plot, gridx=gridx, gridy=gridy,
-                             yscale=yscale, **kwargs)
-
-    #if co_data is not None:
-    #    [ax.set_prop_cycle(cycler('color',co_data)) for ax in axs]
+    fig, axs, elects_to_plot = electrode_grid(xlims=align_window, **kwargs)
 
     h_lines = []
-    for D, color in zip(Ds,co_data):
+    for D, color in zip(Ds, co_data):
         D = D[np.array(elects_to_plot).astype(int)]
         mean_erp = np.ma.mean(D, axis=2)
         tt = np.linspace(align_window[0], align_window[1], mean_erp.shape[1])
@@ -251,11 +219,6 @@ def show_erps(Ds, labels=None, align_window=None, show_sem=True, co_data=None, e
         yl = ax.get_ylim()
         ax.set_yticks((yl[0], 0, yl[1]))
         ax.grid(True)
-    #axs[-1].set_yticklabels(axs[-1].get_yticks())
-
-    #axs[240].set_xticks((np.min(tt),0,np.max(tt)))
-    #axs[240].xaxis.set_ticklabels((np.min(tt),0,np.max(tt)))
-    #axs[240].set_xlabel('times (s)')
     if labels is not None:
         fig.legend(h_lines, labels, loc='upper right', ncol=2)
 
