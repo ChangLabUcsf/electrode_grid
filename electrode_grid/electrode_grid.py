@@ -12,7 +12,8 @@ from seaborn.utils import set_hls_values
 def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=(-1., 1.), ylims=(-.5, 2.),
                    anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True, elect_num_pos='ul',
                    clinical_num_pos=None, grid_orientation='lr', xlabel='time (s)', ylabel='HG', channel_order=None,
-                   fig=None, anat_legend_kwargs=None, clinical_number_kwargs=None, elec_number_kwargs=None):
+                   fig=None, anat_legend_kwargs=None, clinical_number_kwargs=None, elec_number_kwargs=None,
+                   spineless=True, lighten=.93):
     """
     Create electrod grid for plotting.
 
@@ -107,7 +108,7 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
         for i, region in enumerate(regions):
             color = np.array(anat_colors['ctx-rh-' + region]) / 255. # mpl takes colors as (0≤x≤1)
             anat_color_array[region_indices == i,:] = color
-            anat_legend_h.append(mpl.patches.Patch(color=color, label=region))
+            anat_legend_h.append(mpl.patches.Patch(color=set_hls_values(color, l=lighten), label=region))
 
         # create smart anat legend
         true_anat_legend_kwargs = {'loc': 'upper left'}
@@ -146,9 +147,15 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
         ax = fig.add_subplot(gridy, gridx, channel_order[elect_number])
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
-        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=.95))  # lighten color
+        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=lighten))  # lighten color
+
+
         for spine in ax.spines.values():
-            spine.set_color(this_anat_color)
+            if spineless:
+                spine.set_visible(False)
+            else:
+                spine.set_color(this_anat_color)
+
         a.append(ax)
 
         # Add electrode numbers
