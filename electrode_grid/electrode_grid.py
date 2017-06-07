@@ -12,7 +12,7 @@ from seaborn.utils import set_hls_values
 def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=(-1., 1.), ylims=(-.5, 2.),
                    anat_colors=None, xlabel_elect=None, ylabel_elect=256, anat_legend=True, elect_num_pos='ul',
                    clinical_num_pos=None, grid_orientation='lr', xlabel='time (s)', ylabel='HG', channel_order=None,
-                   fig=None, anat_legend_kwargs={}, clinical_number_kwargs={}, elec_number_kwargs={}):
+                   fig=None, anat_legend_kwargs=None, clinical_number_kwargs=None, elec_number_kwargs=None):
     """
     Create electrod grid for plotting.
 
@@ -26,7 +26,7 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
         List of anatomy_ID for each electrode. Used to color background of each axis.
     xlims, ylims: tuple
         axes are set using these xlims and ylims
-    anat_colors: dictionary
+    anat_colors: None o| dict
         region (str) -> r,g,b (as 0>x>1). Default is the freesurfer colormap, but any of the rois colors can be replaced
         here.
     xlabel_elect, ylabel_elect: int
@@ -52,12 +52,15 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
         grid_orientation.
     fig: plt.Figure
         Default: None
-    anat_legend_kwargs: dict
-    clinical_number_kwargs: dict
-    elec_number_kwargs: dict
+    anat_legend_kwargs: None | dict
+    clinical_number_kwargs: None | dict
+    elec_number_kwargs: None | dict
 
     Returns
     -------
+    fig: plt.Figure
+    axs: list(plt.Axes)
+    elects_to_plot: np.array()
 
     """
 
@@ -88,30 +91,32 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
                     break
 
     # Define axes face color to illustrate anatomy
-    anat_color_array = np.array([0.9, 0.9, 0.9] * nelect)  # initialize to light gray
-    if anatomy is None and anat_colors is not None:
+    anat_color_array = np.array([[0.9, 0.9, 0.9]] * nelect)  # initialize to light gray
+    if anatomy is None and anat_colors is not {}:
         raise Warning('anat colors set without anatomy specified.')
     else:
         # set up anatomy colors
         input_anat_colors = copy(anat_colors)
         anat_colors = get_lut()  # use freesurfer defaults
-        anat_colors.update(**input_anat_colors)
+        if input_anat_colors:
+            anat_colors.update(**input_anat_colors)
 
         anatomy = anatomy[elects_to_plot]
         regions, region_indices = np.unique(anatomy, return_inverse=True)
         anat_legend_h = []
         for i, region in enumerate(regions):
-            color = anat_colors['ctx-rh-' + region] / 255.
-            anat_color_array[region_indices == i] = color
+            color = np.array(anat_colors['ctx-rh-' + region]) / 255. # mpl takes colors as (0≤x≤1)
+            anat_color_array[region_indices == i,:] = color
             anat_legend_h.append(mpl.patches.Patch(color=color, label=region))
 
         # create smart anat legend
-        true_anat_legend_kwargs = {'loc': 'upper_left'}
+        true_anat_legend_kwargs = {'loc': 'upper left'}
         if len(regions) > 4:
             true_anat_legend_kwargs.update(ncol=2)
-        true_anat_legend_kwargs.update(**anat_legend_kwargs)
+        if anat_legend_kwargs:
+            true_anat_legend_kwargs.update(**anat_legend_kwargs)
         if anat_legend:
-            fig.legend(handles=anat_legend_h, labels=regions, **anat_legend_kwargs)
+            fig.legend(handles=anat_legend_h, labels=regions, **true_anat_legend_kwargs)
 
     if channel_order == None:
         # Rotate grid by indexing
@@ -126,28 +131,29 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
 
     # set electrode number properties
     true_elec_number_kwargs = {'fontsize': 10}
-    true_elec_number_kwargs.update(**elec_number_kwargs)
+    if elec_number_kwargs:
+        true_elec_number_kwargs.update(**elec_number_kwargs)
 
     true_clinical_number_kwargs = {'fontsize': 10, 'color': 'r'}
-    true_clinical_number_kwargs.update(**clinical_number_kwargs)
+    if clinical_number_kwargs:
+        true_clinical_number_kwargs.update(**clinical_number_kwargs)
 
     # Add subplot for each electrode
     a = []  # axes list
-    for ielect, (elect_number, this_anat_color) in tqdm(enumerate(zip(elects_to_plot, anat_colors)),
+    for ielect, (elect_number, this_anat_color) in tqdm(enumerate(zip(elects_to_plot, anat_color_array)),
                                                         total=len(elects_to_plot), desc='Drawing electrode grid'):
 
         ax = fig.add_subplot(gridy, gridx, channel_order[elect_number])
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
-        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=.7))  # lighten color
+        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=.95))  # lighten color
         for spine in ax.spines.values():
             spine.set_color(this_anat_color)
         a.append(ax)
 
-        # Add electrode number
+        # Add electrode numbers
         if elect_num_pos:
             corner_text(str(elect_number + 1), elect_num_pos, ax, **true_elec_number_kwargs)
-
         if clinical_num_pos:
             if (elect_number + 1) in clinical_electrodes:
                 clinical_number = np.where(clinical_electrodes == (elect_number + 1))[0] + 1
@@ -156,27 +162,24 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None, xlims=
         # Add axes labels only on corner electrodes
         ax.set_xticks((xlims[0], 0, xlims[1]))
 
+        # set axes labels
         if elect_number == xlabel_elect - 1:
-            ax.set_yticklabels([])
             ax.set_xlabel(xlabel)
-        elif elect_number == ylabel_elect - 1:
+        else:
             ax.set_xticklabels([])
+        if elect_number == ylabel_elect - 1:
             ax.set_ylabel(ylabel)
         else:
             ax.set_yticklabels([])
-            ax.set_xticklabels([])
 
-    # for axi in a:
-    #    plt.plot([0,0],axi.get_ylim(),color='black', axes=axi)
-
-    plt.subplots_adjust(left=.07, right=.99, bottom=.1, top=.86, hspace=0.1, wspace=0.1)
+    fig.subplots_adjust(left=.05, right=.99, bottom=.1, top=.9, hspace=0.1, wspace=0.1)
 
     return fig, a, elects_to_plot
 
 
 def show_erps(Ds, align_window, labels=None, show_sem=True, co_data=None, **kwargs):
     """
-
+    Use plot ERPs on electrode_grid
     Parameters
     ----------
     Ds: list
@@ -313,7 +316,8 @@ def corner_text(text, spec, ax, **kwargs):
         x = 1.0
         ha = 'right'
 
-    kwargs = {'va': va, 'ha': ha}.update(**kwargs)
-    h = plt.text(x, y, str(text), transform=ax.transAxes, **kwargs)
+    true_kwargs = {'va': va, 'ha': ha}
+    true_kwargs.update(**kwargs)
+    h = plt.text(x, y, str(text), transform=ax.transAxes, **true_kwargs)
 
     return h
