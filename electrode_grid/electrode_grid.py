@@ -104,9 +104,9 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None,
     # Define axes face color to illustrate anatomy
     # initialize to light gray
     anat_color_array = np.array([[0.9, 0.9, 0.9]] * nelect)
-    if anatomy is None and anat_colors is not {}:
-        raise Warning('anat colors set without anatomy specified.')
-    else:
+    if anat_colors is not None:
+        if anatomy is None:
+            raise Warning('anat colors set without anatomy specified.')
         # set up anatomy colors
         input_anat_colors = copy(anat_colors)
         anat_colors = get_lut()  # use freesurfer defaults
@@ -209,6 +209,7 @@ def show_erps(Ds, align_window, labels=None, show_sem=True, co_data=None,
               **kwargs):
     """
     Use plot ERPs on electrode_grid
+
     Parameters
     ----------
     Ds: list
