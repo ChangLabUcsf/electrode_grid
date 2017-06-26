@@ -134,17 +134,12 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None,
             fig.legend(handles=anat_legend_h, labels=regions,
                        **true_anat_legend_kwargs)
 
-    if channel_order == None:
+    if channel_order is None:
         # Rotate grid by indexing
         elecs_grid = np.array(range(1, nelect + 1)).reshape(gridx, gridy)
-        if grid_orientation == 'lr':
-            channel_order = np.rot90(elecs_grid.transpose(), 2).reshape(nelect)
-        elif grid_orientation == 'll':
-            channel_order = np.rot90(elecs_grid.transpose(), 1).reshape(nelect)
-        elif grid_orientation == 'ur':
-            channel_order = np.rot90(elecs_grid.transpose(), 3).reshape(nelect)
-        elif grid_orientation == 'straight':
-            channel_order = np.arange(nelect) + 1
+        rotation_num = ('straight', 'll', 'lr', 'ur').index(grid_orientation)
+        channel_order = np.rot90(elecs_grid.transpose(),
+                                 rotation_num).reshape(nelect)
 
     # set electrode number properties
     true_elec_number_kwargs = {'fontsize': 10}
