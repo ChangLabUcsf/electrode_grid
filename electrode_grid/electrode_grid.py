@@ -159,7 +159,7 @@ def electrode_grid(gridx=16, gridy=16, elects_to_plot=None, anatomy=None,
         ax = fig.add_subplot(gridy, gridx, channel_order[elect_number])
         ax.set_xlim(xlims)
         ax.set_ylim(ylims)
-        ax.set_axis_bgcolor(set_hls_values(this_anat_color, l=lighten))  # lighten color
+        ax.set_facecolor(set_hls_values(this_anat_color, l=lighten))  # lighten color
 
 
         for spine in ax.spines.values():
